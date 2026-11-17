@@ -127,6 +127,7 @@ jobs:
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$BUILD/ios-toolchain.cmake" \
             -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
             -DBUILD_SHARED_LIBS=OFF \
             -DBUILD_TESTING=OFF \
             -DDISABLE_THREAD_LOCAL_STORAGE=ON
