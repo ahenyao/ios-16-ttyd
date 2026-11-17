@@ -244,64 +244,64 @@ jobs:
             https://github.com/tsl0922/ttyd.git \
             "$BUILD/ttyd"
 
-            python3 - "$BUILD/ttyd/src/utils.c" <<'PY'
-            from pathlib import Path
-            import sys
-            
-            path = Path(sys.argv[1])
-            source = path.read_text()
-            
-            source = source.replace(
-                '#include <string.h>',
-                '#include <string.h>\n'
-                '#ifdef __APPLE__\n'
-                '#include <TargetConditionals.h>\n'
-                '#endif',
-                1
-            )
-            
-            old = '''int open_uri(char *uri) {
-            #ifdef __APPLE__
-              char command[256];
-              sprintf(command, "open %s > /dev/null 2>&1", uri);
-              return system(command);
-            #elif defined(_WIN32) || defined(__CYGWIN__)
-              return ShellExecute(0, 0, uri, 0, 0, SW_SHOW) > (HINSTANCE)32 ? 0 : 1;
-            #else
-              // check if X server is running
-              if (system("xset -q > /dev/null 2>&1")) return 1;
-              char command[256];
-              sprintf(command, "xdg-open %s > /dev/null 2>&1", uri);
-              return system(command);
-            #endif
-            }'''
-            
-            new = '''int open_uri(char *uri) {
-            #if defined(__APPLE__) && TARGET_OS_IPHONE
-              // iOS does not support system(). Browser launching is not available.
-              (void)uri;
-              return 1;
-            #elif defined(__APPLE__)
-              char command[256];
-              sprintf(command, "open %s > /dev/null 2>&1", uri);
-              return system(command);
-            #elif defined(_WIN32) || defined(__CYGWIN__)
-              return ShellExecute(0, 0, uri, 0, 0, SW_SHOW) > (HINSTANCE)32 ? 0 : 1;
-            #else
-              // check if X server is running
-              if (system("xset -q > /dev/null 2>&1")) return 1;
-              char command[256];
-              sprintf(command, "xdg-open %s > /dev/null 2>&1", uri);
-              return system(command);
-            #endif
-            }'''
-            
-            if old not in source:
-                raise SystemExit("ERROR: Could not find original open_uri() implementation")
-            
-            path.write_text(source.replace(old, new, 1))
-            print("Patched open_uri() for iOS")
-            PY
+          python3 - "$BUILD/ttyd/src/utils.c" <<'PY'
+          from pathlib import Path
+          import sys
+          
+          path = Path(sys.argv[1])
+          source = path.read_text()
+          
+          source = source.replace(
+              '#include <string.h>',
+              '#include <string.h>\n'
+              '#ifdef __APPLE__\n'
+              '#include <TargetConditionals.h>\n'
+              '#endif',
+              1
+          )
+          
+          old = '''int open_uri(char *uri) {
+          #ifdef __APPLE__
+            char command[256];
+            sprintf(command, "open %s > /dev/null 2>&1", uri);
+            return system(command);
+          #elif defined(_WIN32) || defined(__CYGWIN__)
+            return ShellExecute(0, 0, uri, 0, 0, SW_SHOW) > (HINSTANCE)32 ? 0 : 1;
+          #else
+            // check if X server is running
+            if (system("xset -q > /dev/null 2>&1")) return 1;
+            char command[256];
+            sprintf(command, "xdg-open %s > /dev/null 2>&1", uri);
+            return system(command);
+          #endif
+          }'''
+          
+          new = '''int open_uri(char *uri) {
+          #if defined(__APPLE__) && TARGET_OS_IPHONE
+            // iOS does not support system(). Browser launching is not available.
+            (void)uri;
+            return 1;
+          #elif defined(__APPLE__)
+            char command[256];
+            sprintf(command, "open %s > /dev/null 2>&1", uri);
+            return system(command);
+          #elif defined(_WIN32) || defined(__CYGWIN__)
+            return ShellExecute(0, 0, uri, 0, 0, SW_SHOW) > (HINSTANCE)32 ? 0 : 1;
+          #else
+            // check if X server is running
+            if (system("xset -q > /dev/null 2>&1")) return 1;
+            char command[256];
+            sprintf(command, "xdg-open %s > /dev/null 2>&1", uri);
+            return system(command);
+          #endif
+          }'''
+          
+          if old not in source:
+              raise SystemExit("ERROR: Could not find original open_uri() implementation")
+          
+          path.write_text(source.replace(old, new, 1))
+          print("Patched open_uri() for iOS")
+          PY
 
           cmake -S "$BUILD/ttyd" \
             -B "$BUILD/ttyd-build" \
