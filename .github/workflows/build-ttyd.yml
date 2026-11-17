@@ -95,7 +95,7 @@ jobs:
           set -euxo pipefail
 
           curl -fL \
-            "https://zlib.net/zlib-${ZLIB_VERSION}.tar.gz" \
+            "https://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.gz" \
             -o "$BUILD/zlib.tar.gz"
 
           tar xf "$BUILD/zlib.tar.gz" -C "$BUILD"
