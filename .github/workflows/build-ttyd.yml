@@ -336,7 +336,7 @@ jobs:
           cmake --build "$BUILD/ttyd-build" --parallel
 
           mkdir -p dist
-          cp "$BUILD/ttyd-build/ttyd" dist/ttyd
+          cp "$BUILD/ttyd-build/ttyd.app/ttyd" dist/ttyd
 
           chmod +x dist/ttyd
 
