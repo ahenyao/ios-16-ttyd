@@ -151,7 +151,8 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="$BUILD/ios-toolchain.cmake" \
             -DCMAKE_INSTALL_PREFIX="$PREFIX" \
             -DBUILD_SHARED_LIBS=OFF \
-            -DLIBUV_BUILD_TESTS=OFF
+            -DLIBUV_BUILD_TESTS=OFF \
+            -DLIBUV_BUILD_SHARED=OFF
 
           cmake --build "$BUILD/libuv-build" --parallel
           cmake --install "$BUILD/libuv-build"
@@ -194,6 +195,23 @@ jobs:
           tar xf "$BUILD/lws.tar.gz" -C "$BUILD"
 
           LWS_SOURCE="$BUILD/libwebsockets-$LWS_VERSION"
+
+          # Fix libwebsockets CMake package configuration for static-only builds.
+          python3 - "$LWS_SOURCE/cmake/libwebsockets-config.cmake.in" <<'PY'
+          import sys
+          from pathlib import Path
+          
+          path = Path(sys.argv[1])
+          content = path.read_text()
+          
+          if "websockets_shared" not in content:
+              raise SystemExit("Expected websockets_shared reference not found!")
+          
+          content = content.replace(" websockets_shared", "")
+          path.write_text(content)
+          
+          print("Removed websockets_shared from libwebsockets CMake config")
+          PY
 
           cmake -S "$LWS_SOURCE" \
           -B "$BUILD/lws-build" \
