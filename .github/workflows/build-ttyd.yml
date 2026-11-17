@@ -1,0 +1,274 @@
+
+name: Build ttyd for iOS ARM64
+
+on:
+  workflow_dispatch:
+    inputs:
+      ttyd_version:
+        description: "ttyd version"
+        required: true
+        default: "1.7.7"
+      ios_version:
+        description: "Minimum iOS version"
+        required: true
+        default: "16.0"
+
+  push:
+    paths:
+      - ".github/workflows/build-ttyd.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ttyd (iOS ARM64)
+    runs-on: macos-15
+
+    env:
+      TTYD_VERSION: ${{ inputs.ttyd_version || '1.7.7' }}
+      IOS_VERSION: ${{ inputs.ios_version || '16.0' }}
+
+      PREFIX: ${{ github.workspace }}/stage
+      BUILD: ${{ github.workspace }}/build
+      SDK: iphoneos
+
+      ZLIB_VERSION: "1.3.2"
+      JSON_C_VERSION: "0.18"
+      OPENSSL_VERSION: "3.6.1"
+      LIBUV_VERSION: "1.52.1"
+      LWS_VERSION: "4.5.7"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          brew install cmake ninja pkg-config
+
+      - name: Configure Apple toolchain
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          export SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
+          echo "SDKROOT=$SDKROOT" >> "$GITHUB_ENV"
+
+          export CC="$(xcrun --sdk iphoneos --find clang)"
+          export AR="$(xcrun --sdk iphoneos --find ar)"
+          export RANLIB="$(xcrun --sdk iphoneos --find ranlib)"
+
+          echo "CC=$CC" >> "$GITHUB_ENV"
+          echo "AR=$AR" >> "$GITHUB_ENV"
+          echo "RANLIB=$RANLIB" >> "$GITHUB_ENV"
+
+          mkdir -p "$PREFIX" "$BUILD"
+
+          cat > "$BUILD/ios-toolchain.cmake" <<EOF
+          set(CMAKE_SYSTEM_NAME iOS)
+          set(CMAKE_SYSTEM_PROCESSOR arm64)
+
+          set(CMAKE_OSX_SYSROOT "$SDKROOT")
+          set(CMAKE_OSX_ARCHITECTURES arm64)
+          set(CMAKE_OSX_DEPLOYMENT_TARGET "$IOS_VERSION")
+
+          set(CMAKE_C_COMPILER "$CC")
+          set(CMAKE_AR "$AR")
+          set(CMAKE_RANLIB "$RANLIB")
+
+          set(CMAKE_FIND_ROOT_PATH "$PREFIX;$SDKROOT")
+          set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+          set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+          set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+          set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+          set(BUILD_SHARED_LIBS OFF)
+
+          set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+          EOF
+
+          cat "$BUILD/ios-toolchain.cmake"
+
+      - name: Build zlib
+        run: |
+          set -euxo pipefail
+
+          curl -fL \
+            "https://zlib.net/zlib-${ZLIB_VERSION}.tar.gz" \
+            -o "$BUILD/zlib.tar.gz"
+
+          tar xf "$BUILD/zlib.tar.gz" -C "$BUILD"
+
+          cmake -S "$BUILD/zlib-$ZLIB_VERSION" \
+            -B "$BUILD/zlib-build" \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$BUILD/ios-toolchain.cmake" \
+            -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+            -DZLIB_BUILD_SHARED=OFF \
+            -DZLIB_BUILD_STATIC=ON \
+            -DZLIB_BUILD_TESTING=OFF
+
+          cmake --build "$BUILD/zlib-build" --parallel
+          cmake --install "$BUILD/zlib-build"
+
+      - name: Build json-c
+        run: |
+          set -euxo pipefail
+
+          curl -fL \
+            "https://s3.amazonaws.com/json-c_releases/releases/json-c-${JSON_C_VERSION}.tar.gz" \
+            -o "$BUILD/json-c.tar.gz"
+
+          tar xf "$BUILD/json-c.tar.gz" -C "$BUILD"
+
+          cmake -S "$BUILD/json-c-$JSON_C_VERSION" \
+            -B "$BUILD/json-c-build" \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$BUILD/ios-toolchain.cmake" \
+            -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_TESTING=OFF \
+            -DDISABLE_THREAD_LOCAL_STORAGE=ON
+
+          cmake --build "$BUILD/json-c-build" --parallel
+          cmake --install "$BUILD/json-c-build"
+
+      - name: Build libuv
+        run: |
+          set -euxo pipefail
+
+          curl -fL \
+            "https://dist.libuv.org/dist/v${LIBUV_VERSION}/libuv-v${LIBUV_VERSION}.tar.gz" \
+            -o "$BUILD/libuv.tar.gz"
+
+          tar xf "$BUILD/libuv.tar.gz" -C "$BUILD"
+
+          cmake -S "$BUILD/libuv-v$LIBUV_VERSION" \
+            -B "$BUILD/libuv-build" \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$BUILD/ios-toolchain.cmake" \
+            -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DLIBUV_BUILD_TESTS=OFF
+
+          cmake --build "$BUILD/libuv-build" --parallel
+          cmake --install "$BUILD/libuv-build"
+
+      - name: Build OpenSSL
+        run: |
+          set -euxo pipefail
+
+          curl -fL \
+            "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
+            -o "$BUILD/openssl.tar.gz"
+
+          tar xf "$BUILD/openssl.tar.gz" -C "$BUILD"
+
+          cd "$BUILD/openssl-$OPENSSL_VERSION"
+
+          export CC="$CC"
+          export CFLAGS="-miphoneos-version-min=$IOS_VERSION"
+
+          ./Configure ios64-xcrun \
+            no-shared \
+            no-tests \
+            no-module \
+            no-async \
+            no-ssl3 \
+            --prefix="$PREFIX" \
+            --openssldir="$PREFIX/ssl"
+
+          make -j"$(sysctl -n hw.ncpu)"
+          make install_sw
+
+      - name: Build libwebsockets
+        run: |
+          set -euxo pipefail
+
+          curl -fL \
+            "https://github.com/warmcat/libwebsockets/archive/refs/tags/v${LWS_VERSION}.tar.gz" \
+            -o "$BUILD/lws.tar.gz"
+
+          tar xf "$BUILD/lws.tar.gz" -C "$BUILD"
+
+          LWS_SOURCE="$BUILD/libwebsockets-$LWS_VERSION"
+
+          cmake -S "$LWS_SOURCE" \
+            -B "$BUILD/lws-build" \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$BUILD/ios-toolchain.cmake" \
+            -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+            -DCMAKE_PREFIX_PATH="$PREFIX" \
+            -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
+            -DOPENSSL_USE_STATIC_LIBS=TRUE \
+            -DLWS_WITH_SHARED=OFF \
+            -DLWS_WITH_STATIC=ON \
+            -DLWS_WITH_SSL=ON \
+            -DLWS_WITH_LIBUV=ON \
+            -DLWS_WITH_ZLIB=ON \
+            -DLWS_WITHOUT_TESTAPPS=ON \
+            -DLWS_WITHOUT_CLIENT=ON \
+            -DLWS_WITH_HTTP2=OFF \
+            -DLWS_WITH_UDP=OFF \
+            -DLWS_WITH_SYS_STATE=OFF \
+            -DLWS_WITH_SYS_SMD=OFF \
+            -DLWS_WITH_SECURE_STREAMS=OFF \
+            -DLWS_WITHOUT_EXTENSIONS=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+
+          cmake --build "$BUILD/lws-build" --parallel
+          cmake --install "$BUILD/lws-build"
+
+      - name: Build ttyd
+        run: |
+          set -euxo pipefail
+
+          git clone \
+            --depth 1 \
+            --branch "$TTYD_VERSION" \
+            https://github.com/tsl0922/ttyd.git \
+            "$BUILD/ttyd"
+
+          cmake -S "$BUILD/ttyd" \
+            -B "$BUILD/ttyd-build" \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$BUILD/ios-toolchain.cmake" \
+            -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+            -DCMAKE_PREFIX_PATH="$PREFIX" \
+            -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
+            -DOPENSSL_USE_STATIC_LIBS=TRUE \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS="-Os -ffunction-sections -fdata-sections" \
+            -DCMAKE_EXE_LINKER_FLAGS="-Wl,-dead_strip"
+
+          cmake --build "$BUILD/ttyd-build" --parallel
+
+          mkdir -p dist
+          cp "$BUILD/ttyd-build/ttyd" dist/ttyd
+
+          chmod +x dist/ttyd
+
+      - name: Verify executable
+        run: |
+          set -euxo pipefail
+
+          file dist/ttyd
+          lipo -info dist/ttyd
+          otool -L dist/ttyd
+
+          echo "Checking architecture..."
+          file dist/ttyd | grep -q ARM64
+
+          echo "Checking binary type..."
+          otool -hv dist/ttyd
+
+          shasum -a 256 dist/ttyd
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ttyd-ios-arm64
+          path: dist/ttyd
+          if-no-files-found: error
+          retention-days: 30
