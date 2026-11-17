@@ -349,7 +349,7 @@ jobs:
           otool -L dist/ttyd
 
           echo "Checking architecture..."
-          file dist/ttyd | grep -q ARM64
+          file dist/ttyd | grep -qi ARM64
 
           echo "Checking binary type..."
           otool -hv dist/ttyd
