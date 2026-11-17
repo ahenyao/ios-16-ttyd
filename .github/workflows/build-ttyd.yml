@@ -216,7 +216,8 @@ jobs:
             -DLWS_WITH_SYS_SMD=OFF \
             -DLWS_WITH_SECURE_STREAMS=OFF \
             -DLWS_WITHOUT_EXTENSIONS=OFF \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLWS_WITH_GENCRYPTO=OFF
 
           cmake --build "$BUILD/lws-build" --parallel
           cmake --install "$BUILD/lws-build"
