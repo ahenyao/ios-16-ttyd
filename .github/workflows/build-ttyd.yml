@@ -196,28 +196,40 @@ jobs:
           LWS_SOURCE="$BUILD/libwebsockets-$LWS_VERSION"
 
           cmake -S "$LWS_SOURCE" \
-            -B "$BUILD/lws-build" \
-            -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE="$BUILD/ios-toolchain.cmake" \
-            -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-            -DCMAKE_PREFIX_PATH="$PREFIX" \
-            -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
-            -DOPENSSL_USE_STATIC_LIBS=TRUE \
-            -DLWS_WITH_SHARED=OFF \
-            -DLWS_WITH_STATIC=ON \
-            -DLWS_WITH_SSL=ON \
-            -DLWS_WITH_LIBUV=ON \
-            -DLWS_WITH_ZLIB=ON \
-            -DLWS_WITHOUT_TESTAPPS=ON \
-            -DLWS_WITHOUT_CLIENT=ON \
-            -DLWS_WITH_HTTP2=OFF \
-            -DLWS_WITH_UDP=OFF \
-            -DLWS_WITH_SYS_STATE=OFF \
-            -DLWS_WITH_SYS_SMD=OFF \
-            -DLWS_WITH_SECURE_STREAMS=OFF \
-            -DLWS_WITHOUT_EXTENSIONS=OFF \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DLWS_WITH_GENCRYPTO=OFF
+          -B "$BUILD/lws-build" \
+          -G Ninja \
+          -DCMAKE_TOOLCHAIN_FILE="$BUILD/ios-toolchain.cmake" \
+          -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+          -DCMAKE_PREFIX_PATH="$PREFIX" \
+          -DCMAKE_FIND_LIBRARY_SUFFIXES=".a" \
+          -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+          -DOPENSSL_USE_STATIC_LIBS=TRUE \
+          -DLWS_WITH_SHARED=OFF \
+          -DLWS_WITH_STATIC=ON \
+          -DLWS_WITH_SSL=ON \
+          -DLWS_WITH_OPENSSL=ON \
+          -DLWS_WITH_LIBUV=ON \
+          -DLWS_WITH_ZLIB=ON \
+          -DLWS_WITHOUT_TESTAPPS=ON \
+          -DLWS_WITHOUT_CLIENT=ON \
+          -DLWS_WITH_HTTP2=OFF \
+          -DLWS_WITH_UDP=OFF \
+          -DLWS_WITH_SYS_STATE=OFF \
+          -DLWS_WITH_SYS_SMD=OFF \
+          -DLWS_WITH_SECURE_STREAMS=OFF \
+          -DLWS_WITH_SECURE_STREAMS_AUTH_SIGV4=OFF \
+          -DLWS_WITHOUT_EXTENSIONS=OFF \
+          -DLWS_WITH_GENCRYPTO=OFF \
+          -DLWS_WITH_JOSE=OFF \
+          -DLWS_WITH_PLUGINS=OFF \
+          -DLWS_WITH_CGI=OFF \
+          -DLWS_WITH_ACME=OFF \
+          -DLWS_WITH_HTTP_DIGEST_AUTH=OFF \
+          -DCMAKE_BUILD_TYPE=Release
+
+          echo "Checking libwebsockets configuration..."
+          grep -E 'LWS_WITH_(GENCRYPTO|JOSE|PLUGINS|CGI|ACME|HTTP_DIGEST_AUTH):BOOL' \
+          "$BUILD/lws-build/CMakeCache.txt" || true
 
           cmake --build "$BUILD/lws-build" --parallel
           cmake --install "$BUILD/lws-build"
